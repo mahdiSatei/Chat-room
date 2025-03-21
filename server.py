@@ -10,6 +10,7 @@ server.bind(ADRR)
 server.listen(5)
 
 users = {}
+onlinUsers = {}
 
 def handle_client(client_socket):
     while True:
@@ -17,7 +18,7 @@ def handle_client(client_socket):
             message = client_socket.recv(1024).decode()
             if not message:
                 break
-
+            
             if message.startswith("Registration"):
                 _, username, password = message.split(' ')
                 if username in users:
@@ -25,8 +26,17 @@ def handle_client(client_socket):
                 else:
                     users[username] = password
                     client_socket.send("Succseefuly registred!".encode())
+            
+            if message.startswith("Login"):
+                _, username = message.split(' ')
+                if username in users:
+                    client_socket.send("Key 1".encode())
+                    onlinUsers[username] = (client_socket, "1")
+                else:
+                    client_socket.send("User not found.".encode())
+
         except:
-            pass
+            print("error")
         
 while True:
     client_socket, addr = server.accept()
