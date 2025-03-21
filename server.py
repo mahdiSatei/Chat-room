@@ -37,17 +37,29 @@ def handle_client(client_socket):
 
             if message.startswith("H"):
                 _, username = message.split(' ')
-                if username in onlinUsers and username in users:
+                logged_in_user = isLoggin(client_socket)
+                if username in onlinUsers and logged_in_user:
                     broadcast(f"{username} joined the chat room.")
                     client_socket.send(f"\nHi {username}, welcome to the chat room.".encode())
                 else:
                     client_socket.send("Please login.".encode())
 
             if message == "list":
-                client_socket.send("Here is the list of attendees:\n\r".encode())
-                client_socket.send(",".join(onlinUsers.keys()).encode())
-                
-                                       
+                username = isLoggin(client_socket)
+                if username:
+                    client_socket.send("Here is the list of attendees:\n\r".encode())
+                    client_socket.send(",".join(onlinUsers.keys()).encode())
+                else:
+                    client_socket.send("Please login first.".encode())
+
+            if message.startswith("Public"):
+                username = isLoggin(client_socket)
+                if username:
+                    message_body = client_socket.recv(1024).decode()
+                    broadcast(f"Public message from {username}\r\n{message_body}")
+                else:
+                    client_socket.send("Please login first.".encode())
+       
         except Exception as e:
             print(e)
 
@@ -59,6 +71,12 @@ def broadcast(message):
             print(f"User {user} disconnected.")
             del onlinUsers[user]
             socket.close()
+
+def isLoggin(client_socket):
+    for username, (socket, _) in onlinUsers.items():
+        if socket == client_socket:
+            return username
+    return None
 
 while True:
     client_socket, addr = server.accept()
