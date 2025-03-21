@@ -42,7 +42,12 @@ def handle_client(client_socket):
                     client_socket.send(f"\nHi {username}, welcome to the chat room.".encode())
                 else:
                     client_socket.send("Please login.".encode())
-        
+
+            if message == "list":
+                client_socket.send("Here is the list of attendees:\n\r".encode())
+                client_socket.send(",".join(onlinUsers.keys()).encode())
+                
+                                       
         except Exception as e:
             print(e)
 
