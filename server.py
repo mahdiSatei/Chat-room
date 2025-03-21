@@ -19,7 +19,7 @@ def handle_client(client_socket):
             if not message:
                 break
             
-            if message.startswith("Registration"):
+            if message.startswith("R"):
                 _, username, password = message.split(' ')
                 if username in users:
                     client_socket.send("User already exists.".encode())
@@ -27,7 +27,7 @@ def handle_client(client_socket):
                     users[username] = password
                     client_socket.send("Succseefuly registred!".encode())
             
-            if message.startswith("Login"):
+            if message.startswith("L"):
                 _, username = message.split(' ')
                 if username in users:
                     client_socket.send("Key 1".encode())
@@ -35,9 +35,26 @@ def handle_client(client_socket):
                 else:
                     client_socket.send("User not found.".encode())
 
-        except:
-            print("error")
+            if message.startswith("H"):
+                _, username = message.split(' ')
+                if username in onlinUsers and username in users:
+                    broadcast(f"{username} joined the chat room.")
+                    client_socket.send(f"\nHi {username}, welcome to the chat room.".encode())
+                else:
+                    client_socket.send("Please login.".encode())
         
+        except Exception as e:
+            print(e)
+
+def broadcast(message):
+    for user, (socket, _) in onlinUsers.items():
+        try:
+            socket.send(message.encode())
+        except:
+            print(f"User {user} disconnected.")
+            del onlinUsers[user]
+            socket.close()
+
 while True:
     client_socket, addr = server.accept()
     print(f"Connection from {addr} established.")
