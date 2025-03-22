@@ -48,24 +48,28 @@ def handle_client(client_socket):
                 client_socket.close()
                 break
             
-            if message.startswith("Login"):
+            elif message.startswith("Login"):
                 _, username = message.split(' ')
-                if username in users:
-                    client_socket.send("Key 1".encode())
-                    online_users[username] = (client_socket, "1")
-                else:
+                if username not in users:
                     client_socket.send("User not found.".encode())
+                else:
+                    if username in online_users:
+                        old_socket, _ = online_users[username]
+                        old_socket.send("You have been logged out.".encode())
+                        old_socket.close()
+                        del online_users[username]
+                    client_socket.send("key 1".encode())
+                    online_users[username] = (client_socket, "1")
 
-            if message.startswith("Hello"):
-                _, username = message.split(' ')
-                logged_in_user = is_logged_in(client_socket)
-                if username in online_users and logged_in_user:
-                    broadcast(f"{username} joined the chat room.")
-                    client_socket.send(f"\nHi {username}, welcome to the chat room.".encode())
+            elif message.startswith("Hello"):
+                username = is_logged_in(client_socket)
+                if username in online_users and username:
+                    broadcast(f"{username} joined the chat room.\r\n")
+                    client_socket.send(f"Hi {username}, welcome to the chat room.".encode())
                 else:
                     client_socket.send("Please login.".encode())
 
-            if message == "List":
+            elif message == "List":
                 username = is_logged_in(client_socket)
                 if username:
                     client_socket.send("Here is the list of attendees:\n\r".encode())
@@ -73,7 +77,7 @@ def handle_client(client_socket):
                 else:
                     client_socket.send("Please login first.".encode())
 
-            if message.startswith("Public"):
+            elif message.startswith("Public"):
                 username = is_logged_in(client_socket)
                 if username:
                     message_body = client_socket.recv(1024).decode()
@@ -81,7 +85,7 @@ def handle_client(client_socket):
                 else:
                     client_socket.send("Please login first.".encode())
        
-            if message.startswith("Private"):
+            elif message.startswith("Private"):
                 username = is_logged_in(client_socket)
                 if username:
                     recivers = message.split(' ')[2].split(',')       
@@ -89,7 +93,7 @@ def handle_client(client_socket):
                     for reciver in recivers:
                         send_private_massage(client_socket, reciver, message_body, recivers)
 
-            if message.startswith("Bye"):
+            elif message.startswith("Bye"):
                 username = is_logged_in(client_socket)
                 if username:
                     broadcast(f"{username} left the chatroom.")
@@ -100,6 +104,9 @@ def handle_client(client_socket):
                 else:
                     client_socket.send("Please login first".encode())
 
+            else:
+                client_socket.send("Invalid option.".encode())
+                
         except Exception as e:
             username = is_logged_in(client_socket)
             if username:
