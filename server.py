@@ -12,6 +12,22 @@ server.listen(5)
 users = {}
 online_users = {}
 
+def load_users():
+    users = {}
+    try:
+        with open("users.txt", 'r') as file:
+            for line in file:
+                username, password = line.split(":")
+                users[username] = password
+    except FileNotFoundError:
+        pass
+    
+    return users
+
+def save_users(username, password):
+    with open("users.txt", 'a') as file:
+        file.write(f"{username}:{password}\n")
+
 def handle_client(client_socket):
     while True:
         try :
@@ -19,15 +35,20 @@ def handle_client(client_socket):
             if not message:
                 break
             
-            if message.startswith("R"):
+            if message.startswith("Registration"):
                 _, username, password = message.split(' ')
+                if not password:
+                    client_socket.send("Password can not be empty".encode())
                 if username in users:
                     client_socket.send("User already exists.".encode())
                 else:
                     users[username] = password
+                    save_users(username, password)
                     client_socket.send("Succseefuly registred!".encode())
+                client_socket.close()
+                break
             
-            if message.startswith("L"):
+            if message.startswith("Login"):
                 _, username = message.split(' ')
                 if username in users:
                     client_socket.send("Key 1".encode())
@@ -35,7 +56,7 @@ def handle_client(client_socket):
                 else:
                     client_socket.send("User not found.".encode())
 
-            if message.startswith("H"):
+            if message.startswith("Hello"):
                 _, username = message.split(' ')
                 logged_in_user = is_logged_in(client_socket)
                 if username in online_users and logged_in_user:
@@ -44,7 +65,7 @@ def handle_client(client_socket):
                 else:
                     client_socket.send("Please login.".encode())
 
-            if message == "list":
+            if message == "List":
                 username = is_logged_in(client_socket)
                 if username:
                     client_socket.send("Here is the list of attendees:\n\r".encode())
@@ -63,7 +84,7 @@ def handle_client(client_socket):
             if message.startswith("Private"):
                 username = is_logged_in(client_socket)
                 if username:
-                    recivers = message.split(' ')[5].split(',')       
+                    recivers = message.split(' ')[2].split(',')       
                     message_body = client_socket.recv(1024).decode()
                     for reciver in recivers:
                         send_private_massage(client_socket, reciver, message_body, recivers)
@@ -118,6 +139,8 @@ def send_private_massage(sender, reciver, message, recivers):
         sender.send(f"Error: User {reciver} is not online.".encode())    
 
 def main():
+    global users
+    users = load_users()
     print("Server is running...")
     while True:
         client_socket, addr = server.accept()
