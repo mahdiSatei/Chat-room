@@ -3,6 +3,7 @@ import threading
 import os
 from crypto import encrypt_message, decrypt_message
 from messaging import broadcast, send_private_message
+from user_magager import load_users, save_users, is_logged_in
 
 HOST = "127.0.0.1"
 PORT = 15000
@@ -133,28 +134,6 @@ def handle_client(client_socket):
             if username in online_users:
                 del online_users[username]
         client_socket.close()
-
-def load_users():
-    users = {}
-    try:
-        with open("users.txt", 'r') as file:
-            for line in file:
-                username, password = line.split(":")
-                users[username] = password
-    except FileNotFoundError:
-        pass
-    
-    return users
-
-def save_users(username, password):
-    with open("users.txt", 'a') as file:
-        file.write(f"{username}:{password}\n")
-
-def is_logged_in(client_socket, online_users):
-    for username, (socket, _) in online_users.items():
-        if socket == client_socket:
-            return username
-    return None
 
 def main():
     global users
