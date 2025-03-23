@@ -1,16 +1,147 @@
 import socket
 import threading
+import os
+from crypto import encrypt_message, decrypt_message
 
 HOST = "127.0.0.1"
 PORT = 15000
-ADRR = (HOST, PORT)
+ADDR = (HOST, PORT)
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(ADRR)
+server.bind(ADDR)
 server.listen(5)
 
 users = {}
 online_users = {}
+
+def handle_client(client_socket):
+    key = os.urandom(32)
+    try:
+        client_socket.send(key)
+        while True:
+            encrypted_message = client_socket.recv(4096)
+            if not encrypted_message:
+                break
+            message = decrypt_message(key, encrypted_message)
+            if not message:
+                continue
+
+            if message.startswith("Registration"):
+                _, username, password = message.split(' ')
+                if not password:
+                    response = "Password can not be empty"
+                elif username in users:
+                    response = "User already exists."
+                else:
+                    users[username] = password
+                    save_users(username, password)
+                    response = "Successfully registered!"
+                client_socket.send(encrypt_message(key, response))
+                client_socket.close()
+                break
+
+            elif message.startswith("Login"):
+                _, username = message.split(' ')
+                if username not in users:
+                    response = "User not found."
+                else:
+                    if username in online_users:
+                        old_socket, old_key = online_users[username]
+                        old_socket.send(encrypt_message(old_key, "You have been logged out."))
+                        old_socket.close()
+                        del online_users[username]
+                    session_key = key.hex()[:10] + "..."  
+                    response = f"Login successful\r\nKey {session_key}"
+                    online_users[username] = (client_socket, key)
+                client_socket.send(encrypt_message(key, response))
+
+            elif message.startswith("Hello"):
+                username = is_logged_in(client_socket, online_users)
+                if username:
+                    broadcast(f"{username} joined the chat room.", online_users)
+                    response = f"Hi {username}, welcome to the chat room."
+                else:
+                    response = "Please login."
+                client_socket.send(encrypt_message(key, response))
+
+            elif message == "List":
+                username = is_logged_in(client_socket, online_users)
+                if username:
+                    response = "Here is the list of attendees:\n" + ",".join(online_users.keys())
+                else:
+                    response = "Please login first."
+                client_socket.send(encrypt_message(key, response))
+
+            elif message.startswith("Public"):
+                username = is_logged_in(client_socket, online_users)
+                if username:
+                    encrypted_body = client_socket.recv(4096)
+                    message_body = decrypt_message(key, encrypted_body)
+                    if message_body:
+                        broadcast(f"Public message from {username}\r\n{message_body}", online_users)
+                    else:
+                        response = "Message can not be empty"
+                        client_socket.send(encrypt_message(key, response))
+                else:
+                    response = "Please login first."
+                    client_socket.send(encrypt_message(key, response))
+
+            elif message.startswith("Private"):
+                username = is_logged_in(client_socket, online_users)
+                if username:
+                    parts = message.split(' ')
+                    if len(parts) >= 3:
+                        receivers = parts[2].split(',')
+                        print(receivers)
+                        encrypted_body = client_socket.recv(4096)
+                        message_body = decrypt_message(key, encrypted_body)
+                        if message_body:
+                            for receiver in receivers:
+                                send_private_message(client_socket, receiver, message_body, receivers, online_users, users)
+                        else:
+                            response = "Message can not be empty"
+                            client_socket.send(encrypt_message(key, response))
+                    else:
+                        response = "Invalid command format. Use: Private to user1,user2,..."
+                        client_socket.send(encrypt_message(key, response))
+                else:
+                    response = "Please login first."
+                    client_socket.send(encrypt_message(key, response))
+
+            elif message.startswith("Bye"):
+                username = is_logged_in(client_socket, online_users)
+                if username:
+                    broadcast(f"{username} left the chatroom.", online_users)
+                    del online_users[username]
+                    response = "You have left the chatroom."
+                    client_socket.send(encrypt_message(key, response))
+                    client_socket.close()
+                    break
+                else:
+                    response = "Please login first"
+                    client_socket.send(encrypt_message(key, response))
+
+            else:
+                response = "Invalid option."
+                client_socket.send(encrypt_message(key, response))
+
+    except Exception as e:
+        username = is_logged_in(client_socket, online_users)
+        if username:
+            print(f"User {username} disconnected unexpectedly: {e}")
+            if username in online_users:
+                del online_users[username]
+        client_socket.close()
+
+
+def broadcast(message):
+    for user, (socket, _) in online_users.items():
+        try:
+            socket.send(message.encode())
+        except:
+            print(f"User {user} disconnected.")
+            del online_users[user]
+            socket.close()
 
 def load_users():
     users = {}
@@ -28,109 +159,13 @@ def save_users(username, password):
     with open("users.txt", 'a') as file:
         file.write(f"{username}:{password}\n")
 
-def handle_client(client_socket):
-    while True:
-        try :
-            message = client_socket.recv(1024).decode()
-            if not message:
-                break
-            
-            if message.startswith("Registration"):
-                _, username, password = message.split(' ')
-                if not password:
-                    client_socket.send("Password can not be empty".encode())
-                if username in users:
-                    client_socket.send("User already exists.".encode())
-                else:
-                    users[username] = password
-                    save_users(username, password)
-                    client_socket.send("Succseefuly registred!".encode())
-                client_socket.close()
-                break
-            
-            elif message.startswith("Login"):
-                _, username = message.split(' ')
-                if username not in users:
-                    client_socket.send("User not found.".encode())
-                else:
-                    if username in online_users:
-                        old_socket, _ = online_users[username]
-                        old_socket.send("You have been logged out.".encode())
-                        old_socket.close()
-                        del online_users[username]
-                    client_socket.send("key 1".encode())
-                    online_users[username] = (client_socket, "1")
-
-            elif message.startswith("Hello"):
-                username = is_logged_in(client_socket)
-                if username in online_users and username:
-                    broadcast(f"{username} joined the chat room.\r\n")
-                    client_socket.send(f"Hi {username}, welcome to the chat room.".encode())
-                else:
-                    client_socket.send("Please login.".encode())
-
-            elif message == "List":
-                username = is_logged_in(client_socket)
-                if username:
-                    client_socket.send("Here is the list of attendees:\n\r".encode())
-                    client_socket.send(",".join(online_users.keys()).encode())
-                else:
-                    client_socket.send("Please login first.".encode())
-
-            elif message.startswith("Public"):
-                username = is_logged_in(client_socket)
-                if username:
-                    message_body = client_socket.recv(1024).decode()
-                    broadcast(f"Public message from {username}\r\n{message_body}")
-                else:
-                    client_socket.send("Please login first.".encode())
-       
-            elif message.startswith("Private"):
-                username = is_logged_in(client_socket)
-                if username:
-                    recivers = message.split(' ')[2].split(',')       
-                    message_body = client_socket.recv(1024).decode()
-                    for reciver in recivers:
-                        send_private_massage(client_socket, reciver, message_body, recivers)
-
-            elif message.startswith("Bye"):
-                username = is_logged_in(client_socket)
-                if username:
-                    broadcast(f"{username} left the chatroom.")
-                    del online_users[username]
-                    client_socket.send("You have left the chatroom.".encode())
-                    client_socket.close()
-                    break
-                else:
-                    client_socket.send("Please login first".encode())
-
-            else:
-                client_socket.send("Invalid option.".encode())
-                
-        except Exception as e:
-            username = is_logged_in(client_socket)
-            if username:
-                print(f"User {username} disconnected unexpectedly: {e}")
-                del online_users[username]
-            client_socket.close()
-            break
-
-def broadcast(message):
-    for user, (socket, _) in online_users.items():
-        try:
-            socket.send(message.encode())
-        except:
-            print(f"User {user} disconnected.")
-            del online_users[user]
-            socket.close()
-
-def is_logged_in(client_socket):
+def is_logged_in(client_socket, online_users):
     for username, (socket, _) in online_users.items():
         if socket == client_socket:
             return username
     return None
 
-def send_private_massage(sender, reciver, message, recivers):
+def send_private_message(sender, reciver, message, recivers):
     sender_username = is_logged_in(sender)
     if reciver not in users:
         sender.send(f"User {reciver} dose not exist.".encode())
