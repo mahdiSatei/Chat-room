@@ -1,2 +1,4 @@
 venv
 users.txt
+__pycache__
+chat_history.txt
