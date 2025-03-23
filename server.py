@@ -1,9 +1,10 @@
 import socket
 import threading
 import os
+from datetime import datetime  # برای ثبت زمان پیام‌ها
 from crypto import encrypt_message, decrypt_message
 from messaging import broadcast, send_private_message
-from user_magager import load_users, save_users, is_logged_in
+from user_manager import load_users, save_users, is_logged_in
 
 HOST = "127.0.0.1"
 PORT = 15000
@@ -15,6 +16,21 @@ server.listen(5)
 
 users = {}
 online_users = {}
+CHAT_HISTORY_FILE = "chat_history.txt"  
+
+def save_to_history(message_type, sender, receivers, message_body):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S") 
+    with open(CHAT_HISTORY_FILE, "a", encoding="utf-8") as f:
+        if message_type == "Public":
+            f.write(f"[{timestamp}] Public from {sender}: {message_body}\n")
+        elif message_type == "Private":
+            f.write(f"[{timestamp}] Private from {sender} to {receivers}: {message_body}\n")
+
+def read_history():
+    if not os.path.exists(CHAT_HISTORY_FILE):
+        return "No chat history available."
+    with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
+        return f.read()
 
 def handle_client(client_socket):
     key = os.urandom(32)
@@ -81,6 +97,7 @@ def handle_client(client_socket):
                     message_body = decrypt_message(key, encrypted_body)
                     if message_body:
                         broadcast(f"Public message from {username}\r\n{message_body}", online_users)
+                        save_to_history("Public", username, None, message_body)
                     else:
                         response = "Message can not be empty"
                         client_socket.send(encrypt_message(key, response))
@@ -94,12 +111,13 @@ def handle_client(client_socket):
                     parts = message.split(' ')
                     if len(parts) >= 3:
                         receivers = parts[2].split(',')
-                        print(receivers)
                         encrypted_body = client_socket.recv(4096)
                         message_body = decrypt_message(key, encrypted_body)
                         if message_body:
                             for receiver in receivers:
                                 send_private_message(client_socket, receiver, message_body, receivers, online_users, users)
+        
+                            save_to_history("Private", username, ",".join(receivers), message_body)
                         else:
                             response = "Message can not be empty"
                             client_socket.send(encrypt_message(key, response))
@@ -109,7 +127,7 @@ def handle_client(client_socket):
                 else:
                     response = "Please login first."
                     client_socket.send(encrypt_message(key, response))
-
+        
             elif message.startswith("Bye"):
                 username = is_logged_in(client_socket, online_users)
                 if username:
@@ -141,6 +159,10 @@ def main():
     print("Secure Chat Server is running...")
     print(f"Listening on {HOST}:{PORT}")
     
+    if not os.path.exists(CHAT_HISTORY_FILE):
+        with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
+            f.write("Chat History Log\n================\n")
+
     try:
         while True:
             client_socket, addr = server.accept()
