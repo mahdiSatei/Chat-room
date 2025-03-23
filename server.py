@@ -138,12 +138,20 @@ def handle_client(client_socket):
 def main():
     global users
     users = load_users()
-    print("Server is running...")
-    while True:
-        client_socket, addr = server.accept()
-        print(f"Connection from {addr} established.")
-        client_thread = threading.Thread(target=handle_client, args=(client_socket,))
-        client_thread.start()
+    print("Secure Chat Server is running...")
+    print(f"Listening on {HOST}:{PORT}")
+    
+    try:
+        while True:
+            client_socket, addr = server.accept()
+            print(f"Connection from {addr} established.")
+            client_thread = threading.Thread(target=handle_client, args=(client_socket,))
+            client_thread.daemon = True
+            client_thread.start()
+    except KeyboardInterrupt:
+        print("Server shutting down...")
+    finally:
+        server.close()
 
 if __name__ == "__main__":
     main()
