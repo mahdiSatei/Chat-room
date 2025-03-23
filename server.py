@@ -2,6 +2,7 @@ import socket
 import threading
 import os
 from crypto import encrypt_message, decrypt_message
+from messaging import broadcast, send_private_message
 
 HOST = "127.0.0.1"
 PORT = 15000
@@ -133,16 +134,6 @@ def handle_client(client_socket):
                 del online_users[username]
         client_socket.close()
 
-
-def broadcast(message):
-    for user, (socket, _) in online_users.items():
-        try:
-            socket.send(message.encode())
-        except:
-            print(f"User {user} disconnected.")
-            del online_users[user]
-            socket.close()
-
 def load_users():
     users = {}
     try:
@@ -164,21 +155,6 @@ def is_logged_in(client_socket, online_users):
         if socket == client_socket:
             return username
     return None
-
-def send_private_message(sender, reciver, message, recivers):
-    sender_username = is_logged_in(sender)
-    if reciver not in users:
-        sender.send(f"User {reciver} dose not exist.".encode())
-    elif reciver in online_users:
-        reciver_socket = online_users[reciver][0]
-        try:
-            usernames = ",".join(recivers)
-            reciver_socket.send(f"Private message from {sender_username} to {usernames}\r\n".encode())
-            reciver_socket.send(f"{message}".encode())
-        except:
-            sender.send(f"Error: Could not send message to {reciver}.".encode())
-    else:  
-        sender.send(f"Error: User {reciver} is not online.".encode())    
 
 def main():
     global users
