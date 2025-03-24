@@ -2,7 +2,6 @@ import socket
 import threading
 from crypto import encrypt_message, decrypt_message
 
-# ANSI color codes
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
