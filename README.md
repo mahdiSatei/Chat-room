@@ -31,3 +31,6 @@ python client.py
 * `messaging.py` - Manages message handling and communication protocols.
 
 * `user_manager.py` - Manages user-related operations.
+
+## Screenshot
+![]https://github.com/mahdiSatei/Chat-room/edit/main/GIF.gif
